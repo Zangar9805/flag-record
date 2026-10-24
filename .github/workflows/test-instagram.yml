@@ -43,6 +43,20 @@ jobs:
                   )
                   print("HTTP Status:", response.status)
                   print("HTML length:", len(html))
+                  keywords = [
+                      "comment_count",
+                      "like_count",
+                      "edge_media_to_comment",
+                      "xdt_shortcode_media",
+                      "login",
+                      "CB2rbrfnMU"
+                  ]
+                  
+                  for keyword in keywords:
+                      print(
+                          keyword,
+                          "found:", keyword.lower() in html.lower()
+                      )
 
                   for field in [
                       "comment_count",
