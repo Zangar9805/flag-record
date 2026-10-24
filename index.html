@@ -3,8 +3,11 @@
 <html lang="kk">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
   <title>Qazaq Social Analytics</title>
+
   <style>
     body {
       margin: 0;
@@ -13,58 +16,160 @@
       font-family: Arial, sans-serif;
       padding: 30px;
     }
-    main { max-width: 1000px; margin: auto; }
-    h1 { color: #38bdf8; }
+
+    main {
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #38bdf8;
+    }
+
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit,
-        minmax(220px, 1fr));
+      grid-template-columns:
+        repeat(auto-fit, minmax(220px, 1fr));
       gap: 20px;
       margin-top: 30px;
     }
+
     .card {
       background: #1e293b;
       padding: 25px;
       border-radius: 15px;
     }
+
     .number {
       font-size: 32px;
       font-weight: bold;
       margin-top: 12px;
     }
-    .note { color: #94a3b8; }
-    a { color: #38bdf8; }
+
+    .note {
+      color: #94a3b8;
+      margin-top: 25px;
+    }
+
+    a {
+      color: #38bdf8;
+    }
   </style>
 </head>
+
 <body>
   <main>
-    <h1>🇰🇿 Qazaq Social Analytics</h1>
+    <h1>Qazaq Social Analytics</h1>
+
     <p>Нұрлан Қоянбаев — Instagram рекорды</p>
 
     <div class="cards">
+
       <div class="card">
-        <div>💬 Комментарийлер</div>
-        <div class="number">23 383 909</div>
+        <div>Комментарийлер</div>
+        <div class="number" id="comments">
+          Жүктелуде...
+        </div>
       </div>
+
       <div class="card">
-        <div>❤️ Лайктар</div>
-        <div class="number">1 059 680</div>
+        <div>Лайктар</div>
+        <div class="number" id="likes">
+          Жүктелуде...
+        </div>
       </div>
-      <div class="card">
-        <div>📈 Репосттар</div>
-        <div class="number">41 734</div>
-      </div>
+
     </div>
 
-    <p class="note">
-      Дереккөз: Instagram.
-      24.10.2026 күнгі скриншот.
-      Әзірге автоматты жаңартылмайды.
+    <p class="note" id="updated">
+      Статистика жүктелуде...
     </p>
 
-    <a href="https://www.instagram.com/p/CB2rbrfnMU-/">
+    <p class="note" id="status"></p>
+
+    <a href="https://www.instagram.com/p/CB2rbrfnMU-/"
+       target="_blank" rel="noopener noreferrer">
       Instagram жарияланымын ашу
     </a>
+
   </main>
+
+  <script>
+    const numberFormat = new Intl.NumberFormat("kk-KZ");
+
+    async function loadStats() {
+      const status = document.getElementById("status");
+
+      try {
+        const response = await fetch(
+          "./stats.json?t=" + Date.now(),
+          { cache: "no-store" }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "HTTP " + response.status
+          );
+        }
+
+        const data = await response.json();
+
+        if (
+          data.shortcode !== "CB2rbrfnMU-" ||
+          !Number.isSafeInteger(data.comments) ||
+          !Number.isSafeInteger(data.likes) ||
+          data.comments < 0 ||
+          data.likes < 0 ||
+          !data.collected_at ||
+          Number.isNaN(Date.parse(data.collected_at))
+        ) {
+          throw new Error("JSON деректері жарамсыз");
+        }
+
+        document.getElementById("comments")
+          .textContent =
+          numberFormat.format(data.comments);
+
+        document.getElementById("likes")
+          .textContent =
+          numberFormat.format(data.likes);
+
+        const updatedAt = new Date(
+          data.collected_at
+        );
+
+        document.getElementById("updated")
+          .textContent =
+          "Соңғы дерек жиналған уақыт: " +
+          updatedAt.toLocaleString("kk-KZ", {
+            timeZone: "Asia/Almaty",
+            dateStyle: "medium",
+            timeStyle: "medium"
+          }) +
+          " (Алматы уақыты)";
+
+        status.textContent =
+          "Дереккөз: Instagram браузер экспорты";
+
+      } catch (error) {
+        console.error(error);
+
+        status.textContent =
+          "Статистиканы жүктеу қатесі: " +
+          error.message;
+
+        document.getElementById("comments")
+          .textContent = "Қолжетімсіз";
+
+        document.getElementById("likes")
+          .textContent = "Қолжетімсіз";
+      }
+    }
+
+    loadStats();
+
+    // Әр 5 минут сайын JSON файлын қайта тексеру
+    setInterval(loadStats, 300000);
+  </script>
 </body>
 </html>
