@@ -1,0 +1,111 @@
+
+name: Update Statistics History
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - stats.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: statistics-history
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Update history
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          stats = json.loads(
+              Path("stats.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          if stats.get("shortcode") != "CB2rbrfnMU-":
+              raise ValueError("Wrong Instagram post")
+
+          for key in ("comments", "likes"):
+              value = stats.get(key)
+              if type(value) is not int or value < 0:
+                  raise ValueError("Invalid " + key)
+
+          timestamp = stats.get("collected_at")
+          if not isinstance(timestamp, str):
+              raise ValueError("Missing timestamp")
+
+          collected = datetime.fromisoformat(
+              timestamp.replace("Z", "+00:00")
+          )
+          if collected.tzinfo is None:
+              raise ValueError("Timezone required")
+
+          collected = collected.astimezone(timezone.utc)
+          if collected > datetime.now(timezone.utc):
+              raise ValueError("Future timestamp")
+
+          path = Path("history.json")
+
+          if path.exists():
+              history = json.loads(
+                  path.read_text(encoding="utf-8")
+              )
+          else:
+              history = []
+
+          entry = {
+              "collected_at": timestamp,
+              "comments": stats["comments"],
+              "likes": stats["likes"]
+          }
+
+          if not any(
+              x["collected_at"] == timestamp
+              for x in history
+          ):
+              history.append(entry)
+
+          history.sort(key=lambda x: x["collected_at"])
+
+          path.write_text(
+              json.dumps(
+                  history,
+                  ensure_ascii=False,
+                  indent=2
+              ) + "\n",
+              encoding="utf-8"
+          )
+
+          print("History entries:", len(history))
+          PY
+
+      - name: Commit history
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history.json
+          if git diff --cached --quiet; then
+            echo "No new statistics"
+          else
+            git commit -m "Update statistics history"
+            git push
+          fi
