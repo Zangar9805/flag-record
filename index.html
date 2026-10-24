@@ -171,5 +171,159 @@
     // Әр 5 минут сайын JSON файлын қайта тексеру
     setInterval(loadStats, 300000);
   </script>
+  
+<section style="max-width:1000px;margin:40px auto">
+  <h2>Комментарийлер динамикасы</h2>
+
+  <div style="background:#1e293b;padding:20px;
+              border-radius:15px;margin-bottom:20px">
+    <h3>Сағаттық өсім</h3>
+    <canvas id="hourlyChart"></canvas>
+  </div>
+
+  <div style="background:#1e293b;padding:20px;
+              border-radius:15px">
+    <h3>Күндік өсім</h3>
+    <canvas id="dailyChart"></canvas>
+  </div>
+
+  <p id="historyStatus" style="color:#94a3b8"></p>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+<script>
+let hourlyChart;
+let dailyChart;
+
+const almatyHour = new Intl.DateTimeFormat(
+  "en-CA", {
+    timeZone: "Asia/Almaty",
+    year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit",
+    hourCycle: "h23"
+  }
+);
+
+function hourKey(date) {
+  const parts = Object.fromEntries(
+    almatyHour.formatToParts(date)
+      .filter(p => p.type !== "literal")
+      .map(p => [p.type, p.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:00`;
+}
+
+function aggregate(history, type) {
+  const groups = new Map();
+
+  for (const item of history) {
+    const date = new Date(item.collected_at);
+    if (isNaN(date.getTime())) continue;
+
+    const key = hourKey(date);
+    const bucket = type === "daily"
+      ? key.slice(0, 10)
+      : key;
+
+    const old = groups.get(bucket);
+
+    // Әр сағат/күн ішіндегі соңғы өлшем
+    if (!old || date > old.date) {
+      groups.set(bucket, {
+        date,
+        comments: item.comments
+      });
+    }
+  }
+
+  const rows = [...groups.entries()]
+    .sort((a, b) => a[1].date - b[1].date);
+
+  return rows.slice(1).map((row, i) => ({
+    label: row[0],
+    growth: row[1].comments - rows[i][1].comments
+  }));
+}
+
+function drawChart(id, rows, oldChart) {
+  if (oldChart) oldChart.destroy();
+
+  return new Chart(
+    document.getElementById(id), {
+      type: "bar",
+      data: {
+        labels: rows.map(r => r.label),
+        datasets: [{
+          label: "Комментарий өсімі",
+          data: rows.map(r => r.growth),
+          backgroundColor: "#38bdf8"
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: "#ffffff" }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#94a3b8" }
+          },
+          y: {
+            ticks: { color: "#94a3b8" }
+          }
+        }
+      }
+    }
+  );
+}
+
+async function loadHistory() {
+  const status = document.getElementById(
+    "historyStatus"
+  );
+
+  try {
+    const response = await fetch(
+      "./history.json?t=" + Date.now(),
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const history = await response.json();
+    if (!Array.isArray(history)) {
+      throw new Error("Invalid history");
+    }
+
+    const hourly = aggregate(history, "hourly");
+    const daily = aggregate(history, "daily");
+
+    hourlyChart = drawChart(
+      "hourlyChart", hourly, hourlyChart
+    );
+
+    dailyChart = drawChart(
+      "dailyChart", daily, dailyChart
+    );
+
+    status.textContent =
+      `Сақталған өлшемдер: ${history.length}. ` +
+      "Өсім тек жиналған өлшемдер бойынша есептеледі.";
+
+  } catch (error) {
+    status.textContent =
+      "Тарихты жүктеу қатесі: " + error.message;
+  }
+}
+
+loadHistory();
+setInterval(loadHistory, 300000);
+</script>
+
 </body>
 </html>
